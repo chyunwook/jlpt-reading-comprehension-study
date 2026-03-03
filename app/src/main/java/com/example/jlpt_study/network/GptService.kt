@@ -24,26 +24,42 @@ class GptService(private val apiKey: String) {
     private val baseUrl = "https://api.openai.com/v1/chat/completions"
 
     /**
-     * N3 레벨 문장 생성
+     * N3 레벨 문장 생성 (독해 수준)
      */
     suspend fun generateSentences(count: Int = 10): Result<List<SentenceItem>> = withContext(Dispatchers.IO) {
         try {
-            val systemPrompt = """You generate JLPT N3-level reading training items.
-Return ONLY JSON. No extra text."""
+            val systemPrompt = """You are a JLPT N3 reading comprehension question generator.
+Generate sentences at ACTUAL N3 reading test difficulty level.
+Return ONLY valid JSON. No extra text or markdown."""
 
-            val userPrompt = """Generate $count independent JLPT N3-level Japanese sentences suitable for speed-reading training.
-Constraints:
-- 25~55 characters each (not too short)
-- Include common N3 structures (ため/ので/から/ですが/しかし/ています/ことになりました etc.)
-- Everyday contexts (weather, transport, shopping, work, rules)
-For each item, return:
-- jp
-- gold_summary_ko (one-line situation summary in Korean)
-- keywords_core (3 Japanese tokens that are essential)
-- tags (grammar/structure/topic)
+            val userPrompt = """Generate $count JLPT N3-level Japanese sentences for reading comprehension training.
+
+DIFFICULTY REQUIREMENTS (Important - must be N3 reading level, not easy):
+- Length: 40~80 characters (복문 or 중문 preferred)
+- Must include AT LEAST 2 of these N3 grammar patterns per sentence:
+  * Conditional: ば/たら/なら/と
+  * Cause/reason: ため(に)/によって/おかげで/せいで
+  * Contrast: のに/くせに/にもかかわらず/一方で
+  * Conjecture: らしい/ようだ/みたいだ/はずだ/わけだ
+  * Passive/Causative: れる・られる/せる・させる
+  * Nominalization: こと/の/ということ
+  * Complex endings: ことになる/ことにする/ようになる/ようにする
+  * Formal expressions: において/に関して/によると/にとって
+
+CONTENT REQUIREMENTS:
+- Topics: 사회 문제, 직장 생활, 규칙/안내문, 뉴스 기사 스타일, 의견/주장
+- Include some sentences with embedded clauses (関係節)
+- Mix of です/ます and plain form
+- Some keigo expressions (お/ご～になる, いただく)
+
+For each sentence, provide:
+- jp: The Japanese sentence
+- gold_summary_ko: Natural Korean summary capturing the KEY POINT (not literal translation)
+- keywords_core: 3 most important words that determine meaning
+- tags: grammar patterns used, topic
 
 Return JSON:
-{ "items": [ ... ] }"""
+{ "items": [ { "jp": "...", "gold_summary_ko": "...", "keywords_core": ["...", "...", "..."], "tags": ["...", "..."] }, ... ] }"""
 
             val response = callGpt(systemPrompt, userPrompt)
             val parsed = gson.fromJson(response, GeneratedSentencesResponse::class.java)

@@ -10,7 +10,6 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
-import com.example.jlpt_study.data.SampleData
 import com.example.jlpt_study.data.local.AppDatabase
 import com.example.jlpt_study.data.repository.JlptRepository
 import com.example.jlpt_study.navigation.Screen
@@ -48,12 +47,8 @@ fun JlptApp() {
         factory = StatisticsViewModelFactory(repository)
     )
 
-    // 초기 샘플 데이터 로드 및 통계 로드
+    // 통계 로드
     LaunchedEffect(Unit) {
-        // 문장이 없으면 샘플 데이터 추가
-        if (repository.getSentenceCount() == 0) {
-            repository.insertSentences(SampleData.sampleSentences)
-        }
         statisticsViewModel.loadStatistics()
     }
 
@@ -175,6 +170,20 @@ fun JlptApp() {
 
                 MyScreen(
                     uiState = uiState,
+                    onBack = { navController.popBackStack() },
+                    onNavigateToWordBank = {
+                        statisticsViewModel.loadWordBank()
+                        navController.navigate(Screen.WordBank.route)
+                    }
+                )
+            }
+
+            composable(Screen.WordBank.route) {
+                val wordBankState by statisticsViewModel.wordBankState.collectAsState()
+
+                WordBankScreen(
+                    words = wordBankState.words,
+                    isLoading = wordBankState.isLoading,
                     onBack = { navController.popBackStack() }
                 )
             }

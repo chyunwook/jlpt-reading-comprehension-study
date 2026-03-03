@@ -23,6 +23,7 @@ import com.example.jlpt_study.ui.viewmodel.StatisticsUiState
 fun MyScreen(
     uiState: StatisticsUiState,
     onBack: () -> Unit,
+    onNavigateToWordBank: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val scrollState = rememberScrollState()
@@ -98,10 +99,11 @@ fun MyScreen(
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                // 단어장 현황
+                // 단어장 현황 (클릭하면 단어장으로 이동)
                 WordBankCard(
                     totalWords = uiState.totalUnknownWords,
-                    dueForReview = uiState.wordsDueForReview
+                    dueForReview = uiState.wordsDueForReview,
+                    onClick = onNavigateToWordBank
                 )
 
                 Spacer(modifier = Modifier.height(32.dp))
@@ -312,25 +314,38 @@ private fun ErrorTypeRow(
 @Composable
 private fun WordBankCard(
     totalWords: Int,
-    dueForReview: Int
+    dueForReview: Int,
+    onClick: () -> Unit
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceVariant
-        )
+        ),
+        onClick = onClick
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(20.dp)
         ) {
-            Text(
-                text = "📝 단어장 현황",
-                fontSize = 16.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "📝 단어장 현황",
+                    fontSize = 16.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    text = "보기 →",
+                    fontSize = 14.sp,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
             Spacer(modifier = Modifier.height(16.dp))
             
             Row(

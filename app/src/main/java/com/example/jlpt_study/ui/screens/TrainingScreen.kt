@@ -122,7 +122,7 @@ fun TrainingScreen(
 
                 Spacer(modifier = Modifier.weight(1f))
 
-                // 제출 버튼
+                // 제출 버튼 (하단 여백 추가로 OS 네비게이션 바와 겹침 방지)
                 Button(
                     onClick = {
                         focusManager.clearFocus()
@@ -139,6 +139,9 @@ fun TrainingScreen(
                         fontWeight = FontWeight.Bold
                     )
                 }
+                
+                // OS 네비게이션 바와의 간격
+                Spacer(modifier = Modifier.height(32.dp))
             }
         }
 

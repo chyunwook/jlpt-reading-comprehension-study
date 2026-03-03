@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.example.jlpt_study.data.local.ErrorTypeCount
+import com.example.jlpt_study.data.model.WordBankItem
 import com.example.jlpt_study.data.repository.JlptRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -16,6 +17,9 @@ class StatisticsViewModel(
 
     private val _uiState = MutableStateFlow(StatisticsUiState())
     val uiState: StateFlow<StatisticsUiState> = _uiState.asStateFlow()
+
+    private val _wordBankState = MutableStateFlow(WordBankUiState())
+    val wordBankState: StateFlow<WordBankUiState> = _wordBankState.asStateFlow()
 
     fun loadStatistics() {
         viewModelScope.launch {
@@ -42,6 +46,26 @@ class StatisticsViewModel(
                 )
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
+                    isLoading = false,
+                    error = e.message
+                )
+            }
+        }
+    }
+
+    fun loadWordBank() {
+        viewModelScope.launch {
+            _wordBankState.value = _wordBankState.value.copy(isLoading = true)
+
+            try {
+                repository.getAllWordsFlow().collect { words ->
+                    _wordBankState.value = WordBankUiState(
+                        words = words.sortedByDescending { it.lastSeenAt },
+                        isLoading = false
+                    )
+                }
+            } catch (e: Exception) {
+                _wordBankState.value = _wordBankState.value.copy(
                     isLoading = false,
                     error = e.message
                 )
@@ -78,6 +102,12 @@ data class StatisticsUiState(
     val averageResponseTimeSeconds: Float
         get() = averageResponseTimeMs / 1000f
 }
+
+data class WordBankUiState(
+    val words: List<WordBankItem> = emptyList(),
+    val isLoading: Boolean = false,
+    val error: String? = null
+)
 
 class StatisticsViewModelFactory(
     private val repository: JlptRepository

@@ -38,22 +38,25 @@ class TrainingViewModel(
                 isReviewMode = isReview
             )
 
-            val sentences = if (isReview) {
-                getReviewSentences()
+            if (isReview) {
+                // 복습 모드: 기존에 틀린 문장들 가져오기
+                val sentences = getReviewSentences()
+                if (sentences.isEmpty()) {
+                    _uiState.value = _uiState.value.copy(
+                        isLoading = false,
+                        error = "복습할 문장이 없습니다."
+                    )
+                } else {
+                    _uiState.value = _uiState.value.copy(
+                        sentences = sentences,
+                        currentIndex = 0,
+                        isLoading = false
+                    )
+                    startCurrentSentence()
+                }
             } else {
-                repository.getTrainingSentences(SESSION_SIZE)
-            }
-
-            if (sentences.isEmpty()) {
-                // 문장이 없으면 생성 시도
+                // 훈련 모드: 항상 GPT로 새 문장 생성
                 generateNewSentences()
-            } else {
-                _uiState.value = _uiState.value.copy(
-                    sentences = sentences,
-                    currentIndex = 0,
-                    isLoading = false
-                )
-                startCurrentSentence()
             }
         }
     }

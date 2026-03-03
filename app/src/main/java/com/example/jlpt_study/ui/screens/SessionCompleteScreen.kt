@@ -160,6 +160,9 @@ fun SessionCompleteScreen(
                 fontWeight = FontWeight.Medium
             )
         }
+        
+        // OS 네비게이션 바와의 간격
+        Spacer(modifier = Modifier.height(32.dp))
     }
 }
 
