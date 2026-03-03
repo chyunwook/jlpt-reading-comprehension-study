@@ -33,61 +33,102 @@ class GptService(private val apiKey: String) {
      */
     suspend fun generateSentences(count: Int = 10): Result<List<SentenceItem>> = withContext(Dispatchers.IO) {
         try {
-            val systemPrompt = """You are a JLPT N3 reading comprehension item writer.
+            val systemPrompt = """You are a creative JLPT N3 reading comprehension item writer.
 
-Your task is to generate JLPT N3-level reading training sentences
-for speed-reading practice (not casual conversation).
+IMPORTANT: Generate DIVERSE and VARIED sentences every time.
+- Never repeat similar topics or situations
+- Use different subjects, verbs, and contexts each time
+- Be creative with scenarios
 
-The purpose is NOT translation practice.
-The purpose is to train learners to:
-- Ignore unknown words
+The purpose is speed-reading practice:
 - Focus on particles and verbs
-- Identify cause, contrast, and conclusion structure quickly"""
+- Identify cause, contrast, and conclusion structure"""
 
-            val userPrompt = """Generate $count sentences.
+            // 다양성을 위해 랜덤 토픽과 문법 선택
+            val topics = listOf(
+                "회사/직장 (회의, 출장, 프로젝트, 상사, 동료)",
+                "학교/교육 (수업, 시험, 선생님, 학생, 동아리)",
+                "쇼핑/서비스 (가게, 할인, 환불, 예약, 배송)",
+                "건강/병원 (진료, 약, 증상, 운동, 식이)",
+                "여행/교통 (전철, 비행기, 호텔, 관광, 지연)",
+                "날씨/계절 (비, 태풍, 더위, 추위, 예보)",
+                "뉴스/사회 (사건, 조사, 통계, 정책, 변화)",
+                "취미/문화 (영화, 음악, 스포츠, 독서, 게임)",
+                "음식/요리 (레스토랑, 레시피, 재료, 맛, 건강식)",
+                "기술/인터넷 (앱, 업데이트, 오류, 서비스, SNS)",
+                "환경/자연 (쓰레기, 재활용, 에너지, 동물, 식물)",
+                "가족/인간관계 (부모, 친구, 이웃, 결혼, 육아)"
+            ).shuffled().take(5).joinToString(", ")
+            
+            val grammarFocus = listOf(
+                "ため(に)/ので (원인)",
+                "が/けれども/のに (역접)",
+                "らしい/ようだ/そうだ (추측/전문)",
+                "ことになる/ことにする (결정)",
+                "はずだ/わけだ (당연/이유)",
+                "によると/によれば (출처)",
+                "として/にとって (입장)",
+                "ばかり/だけ (한정)",
+                "ても/でも (양보)",
+                "たら/ば/なら (조건)"
+            ).shuffled().take(4).joinToString(", ")
+
+            val userPrompt = """Generate $count DIVERSE sentences.
+
+========================
+VARIETY IS CRITICAL! (다양성 필수!)
+========================
+- Each sentence MUST be about a DIFFERENT topic
+- Do NOT repeat similar situations
+- Mix different grammar patterns
+- Vary sentence structures
+
+This session's topics (이번 세션 주제):
+$topics
+
+This session's grammar focus (이번 세션 문법):
+$grammarFocus
 
 ========================
 DIFFICULTY REQUIREMENTS
 ========================
-- Must match actual JLPT N3 読解 difficulty
-- Length: 50–100 Japanese characters
-- Use 2–3 of these grammar patterns per sentence:
+- JLPT N3 読解 level
+- Length: 50–100 characters
+- Use 2–3 grammar patterns per sentence
 
-Cause:
-ため(に), ので, ことから, せいで, おかげで, によって
-
-Contrast:
-が, けれども, のに, にもかかわらず, 一方(で)
-
-Hearsay / Quote:
-ということだ, とのことだ, そうだ
-
-Conclusion / Conjecture:
-らしい, ようだ, はずだ, わけだ, 予定だ, ことになる
-
-Context should resemble:
-- announcements
-- workplace situations
-- public information
-- daily-life notices
-NOT simple dialogue.
+Grammar patterns to use:
+- Cause: ため(に), ので, ことから, せいで, おかげで, によって
+- Contrast: が, けれども, のに, にもかかわらず, 一方(で)
+- Hearsay: ということだ, とのことだ, そうだ, らしい
+- Conclusion: ようだ, はずだ, わけだ, 予定だ, ことになる
+- Condition: たら, ば, なら, ても
+- Formal: において, に関して, について, にとって, として
 
 Avoid rare N2/N1 vocabulary.
 
 ========================
-FUNCTIONAL BLOCK SPLIT
+PHRASE BLOCK SPLIT (조사 기준 분리)
 ========================
-Split each sentence into clause-level meaning blocks
-for structural reading training.
+Split sentence into SMALL PHRASE units by particles.
+This helps learners click on unknown words easily.
 
-IMPORTANT:
-- Do NOT split into individual words.
-- 3 to 6 blocks per sentence.
-- Each block should be a meaningful clause.
-- Blocks must connect exactly to recreate the original sentence.
+SPLIT RULES:
+- Split AFTER each particle: の, が, は, を, に, で, へ, から, まで, より, と, も
+- Keep verb/adjective + ending together (変わったが as one block)
+- Include punctuation with the previous block (変わったが、)
+- 5-10 blocks per sentence
 
-Use ONLY these block types:
-TOPIC, REASON, CONTRAST, QUOTE, CONCLUSION, OTHER
+EXAMPLES:
+"会社の方針が変わったが、業務には影響がないようだ。"
+→ ["会社の", "方針が", "変わったが、", "業務には", "影響が", "ないようだ。"]
+
+"会議は予定通り行うが、参加者は少ないようだ。"
+→ ["会議は", "予定通り", "行うが、", "参加者は", "少ないようだ。"]
+
+"彼女は忙しいけれども、手伝うと言っていた。"
+→ ["彼女は", "忙しいけれども、", "手伝うと", "言っていた。"]
+
+All blocks use function: "OTHER" (function type not needed anymore)
 
 ========================
 KOREAN SUMMARY RULES (중요!)
@@ -119,20 +160,21 @@ No code fences.
     {
       "jp": "Full Japanese sentence",
       "blocks": [
-        {"text": "...", "function": "TOPIC"},
-        {"text": "...", "function": "REASON"},
-        {"text": "...", "function": "CONCLUSION"}
+        {"text": "会社の", "function": "OTHER"},
+        {"text": "方針が", "function": "OTHER"},
+        {"text": "変わったが、", "function": "OTHER"}
       ],
       "gold_summary_ko": "일본어 어순을 따른 한국어 요약 (25자 내외)",
-      "keywords_core": ["JapaneseWord1", "JapaneseWord2", "JapaneseWord3"],
-      "tags": ["grammar:ため", "structure:cause_result"]
+      "keywords_core": [],
+      "tags": []
     }
   ]
 }
 
 If you cannot follow these instructions exactly, return: {"error":"cannot_comply"}"""
 
-            val response = callGpt(systemPrompt, userPrompt)
+            // 다양성을 위해 높은 temperature 사용 (0.9)
+            val response = callGpt(systemPrompt, userPrompt, temperature = 0.9)
             Log.d(TAG, "========== GPT 문장 생성 응답 ==========")
             Log.d(TAG, "Raw response: $response")
             
@@ -185,35 +227,32 @@ If you cannot follow these instructions exactly, return: {"error":"cannot_comply
         unknownWords: List<String>
     ): Result<GradingResult> = withContext(Dispatchers.IO) {
         try {
-            val systemPrompt = """You grade JLPT N3 reading comprehension answers.
-Return ONLY valid JSON. No explanations."""
+            val systemPrompt = """You grade JLPT N3 reading answers. Return ONLY JSON."""
 
             val userPrompt = """일본어: "$jpSentence"
 정답: "$goldSummaryKo"
-유저답안: "$userSummaryKo"
+유저: "$userSummaryKo"
 
-=== 채점 기준 (엄격하게) ===
-1. 문장을 끝까지 완성해야 정답
-2. 일본어 어순대로 번역해야 정답
-3. 핵심 요소 (주어/대조/결론) 모두 있어야 정답
+=== 정답 기준 ===
+1. 의미가 같으면 정답 (동의어 허용)
+2. 어순이 같으면 정답
+3. 문장이 완성되면 정답
 
-오답 예시:
-- 문장 미완성 → missing_info
-- 어순 틀림 → logic
-- 주어/목적어 틀림 → particle
-- 동사 의미 틀림 → verb
+동의어 예시 (모두 정답):
+- 증가하다 = 늘다 = 많아지다
+- 감소하다 = 줄다 = 적어지다
+- 연기되다 = 미뤄지다
+- 바쁘다 = 시간이 없다
+- ~한다고 한다 = ~한대 = ~래
 
-=== JSON 출력 ===
-{
-  "is_correct": true/false,
-  "match_score": 0.0-1.0,
-  "error_type": "none|particle|verb|vocab|logic|missing_info",
-  "one_line_feedback_ko": "",
-  "suggested_summary_ko": "$goldSummaryKo",
-  "core_structure": {"cause": "", "result": "", "contrast": ""},
-  "keywords_core": [],
-  "words_optional": []
-}"""
+=== 오답 기준 ===
+- 문장 절반만 씀 → missing_info
+- 어순 반대로 → logic  
+- 주어 틀림 → particle
+- 동사 완전히 다름 → verb
+
+=== JSON ===
+{"is_correct":true/false,"match_score":0.0-1.0,"error_type":"none|particle|verb|vocab|logic|missing_info","one_line_feedback_ko":"","suggested_summary_ko":"$goldSummaryKo","core_structure":{"cause":"","result":"","contrast":""},"keywords_core":[],"words_optional":[]}"""
 
             val response = callGpt(systemPrompt, userPrompt)
             val parsed = gson.fromJson(response, GptGradingResponse::class.java)
@@ -238,14 +277,14 @@ Return ONLY valid JSON. No explanations."""
         }
     }
 
-    private fun callGpt(systemPrompt: String, userPrompt: String): String {
+    private fun callGpt(systemPrompt: String, userPrompt: String, temperature: Double = 0.7): String {
         val requestBody = GptRequest(
             model = "gpt-4o-mini",
             messages = listOf(
                 Message("system", systemPrompt),
                 Message("user", userPrompt)
             ),
-            temperature = 0.7,
+            temperature = temperature,
             maxTokens = 2000
         )
 

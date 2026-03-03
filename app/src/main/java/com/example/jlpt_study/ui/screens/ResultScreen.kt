@@ -84,23 +84,12 @@ fun ResultScreen(
             Spacer(modifier = Modifier.height(16.dp))
         }
 
-        // 모르는 단어 (탭한 것)
+        // 모르는 단어 (탭한 것) - 단어장에 저장됨
         if (resultData.attempt.unknownWords.isNotEmpty()) {
             UnknownWordsSection(
-                title = "📝 모름 표시한 단어",
+                title = "📝 모름 표시한 단어 (단어장 저장됨)",
                 words = resultData.attempt.unknownWords,
                 saved = true
-            )
-            Spacer(modifier = Modifier.height(16.dp))
-        }
-
-        // 핵심 키워드 (오답 시 단어장 저장)
-        if (resultData.sentence.keywordsCore.isNotEmpty()) {
-            UnknownWordsSection(
-                title = if (!isCorrect) "📚 핵심 키워드 (단어장 저장됨)" else "📚 핵심 키워드",
-                words = resultData.sentence.keywordsCore,
-                saved = !isCorrect,
-                isKeyword = true
             )
             Spacer(modifier = Modifier.height(16.dp))
         }
