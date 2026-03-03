@@ -26,8 +26,6 @@ import com.example.jlpt_study.ui.viewmodel.ResultData
 @Composable
 fun ResultScreen(
     resultData: ResultData,
-    isLoadingGptFeedback: Boolean,
-    onRequestGptFeedback: () -> Unit,
     onNext: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -106,27 +104,6 @@ fun ResultScreen(
         // 모르는 단어
         if (resultData.attempt.unknownWords.isNotEmpty()) {
             UnknownWordsSection(words = resultData.attempt.unknownWords)
-            Spacer(modifier = Modifier.height(16.dp))
-        }
-
-        // GPT 피드백 요청 버튼 (아직 GPT 결과가 아닐 때만 표시)
-        if (!resultData.gradingResult.isGptResult) {
-            OutlinedButton(
-                onClick = onRequestGptFeedback,
-                enabled = !isLoadingGptFeedback,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                if (isLoadingGptFeedback) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(20.dp),
-                        strokeWidth = 2.dp
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                }
-                Text(
-                    text = if (isLoadingGptFeedback) "피드백 받는 중..." else "GPT 피드백 받기"
-                )
-            }
             Spacer(modifier = Modifier.height(16.dp))
         }
 

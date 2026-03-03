@@ -13,3 +13,12 @@
 .externalNativeBuild
 .cxx
 local.properties
+
+# Secrets and API keys
+secrets.properties
+*.keystore
+*.jks
+api_keys.properties
+
+# App data (DataStore preferences are stored here during development)
+/app/src/main/assets/secrets/

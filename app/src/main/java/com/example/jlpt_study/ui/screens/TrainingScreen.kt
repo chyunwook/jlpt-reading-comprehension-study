@@ -1,13 +1,10 @@
 package com.example.jlpt_study.ui.screens
 
 import androidx.activity.compose.BackHandler
-import androidx.compose.animation.*
-import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -22,12 +19,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.jlpt_study.data.model.SentenceItem
 import com.example.jlpt_study.ui.viewmodel.TrainingUiState
-import kotlinx.coroutines.flow.FlowCollector
 
 @Composable
 fun TrainingScreen(
@@ -66,10 +61,9 @@ fun TrainingScreen(
                     .fillMaxSize()
                     .padding(20.dp)
             ) {
-                // 상단: 진행률 + 타이머
+                // 상단: 진행률
                 TopBar(
                     progressText = uiState.progressText,
-                    remainingSeconds = uiState.remainingSeconds,
                     isReviewMode = uiState.isReviewMode
                 )
 
@@ -171,7 +165,7 @@ fun TrainingScreen(
 }
 
 @Composable
-private fun LoadingContent() {
+private fun LoadingContent(message: String = "GPT가 채점 중입니다...") {
     Box(
         modifier = Modifier.fillMaxSize(),
         contentAlignment = Alignment.Center
@@ -182,7 +176,7 @@ private fun LoadingContent() {
             CircularProgressIndicator()
             Spacer(modifier = Modifier.height(16.dp))
             Text(
-                text = "문장을 준비하고 있습니다...",
+                text = message,
                 fontSize = 16.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -193,12 +187,11 @@ private fun LoadingContent() {
 @Composable
 private fun TopBar(
     progressText: String,
-    remainingSeconds: Int,
     isReviewMode: Boolean
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
+        horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically
     ) {
         // 진행률
@@ -208,50 +201,9 @@ private fun TopBar(
         ) {
             Text(
                 text = if (isReviewMode) "복습 $progressText" else progressText,
-                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                fontSize = 16.sp,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                fontSize = 18.sp,
                 fontWeight = FontWeight.Medium
-            )
-        }
-
-        // 타이머
-        TimerDisplay(seconds = remainingSeconds)
-    }
-}
-
-@Composable
-private fun TimerDisplay(seconds: Int) {
-    val timerColor = when {
-        seconds <= 1 -> Color.Red
-        seconds <= 2 -> Color(0xFFFF9800)
-        else -> MaterialTheme.colorScheme.primary
-    }
-
-    val infiniteTransition = rememberInfiniteTransition(label = "timer")
-    val scale by infiniteTransition.animateFloat(
-        initialValue = 1f,
-        targetValue = if (seconds <= 2) 1.1f else 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(500),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "timerScale"
-    )
-
-    Surface(
-        shape = CircleShape,
-        color = timerColor.copy(alpha = 0.15f),
-        modifier = Modifier.size((56 * scale).dp)
-    ) {
-        Box(
-            contentAlignment = Alignment.Center,
-            modifier = Modifier.fillMaxSize()
-        ) {
-            Text(
-                text = "${seconds}s",
-                fontSize = 20.sp,
-                fontWeight = FontWeight.Bold,
-                color = timerColor
             )
         }
     }

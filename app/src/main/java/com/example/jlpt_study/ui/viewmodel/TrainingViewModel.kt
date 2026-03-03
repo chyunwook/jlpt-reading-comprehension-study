@@ -8,11 +8,8 @@ import com.example.jlpt_study.data.model.ErrorType
 import com.example.jlpt_study.data.model.SentenceItem
 import com.example.jlpt_study.data.repository.JlptRepository
 import com.example.jlpt_study.network.GptService
-import com.example.jlpt_study.network.GradingResult
 import com.example.jlpt_study.network.LocalGradingService
 import com.google.gson.Gson
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -99,29 +96,11 @@ class TrainingViewModel(
 
     private fun startCurrentSentence() {
         sessionStartTime = System.currentTimeMillis()
-        val timerDuration = if (_uiState.value.isReviewMode) REVIEW_TIMER_SECONDS else TIMER_SECONDS
         
         _uiState.value = _uiState.value.copy(
-            remainingSeconds = timerDuration,
             userInput = "",
             unknownWords = emptyList()
         )
-        
-        startTimer(timerDuration)
-    }
-
-    private fun startTimer(seconds: Int) {
-        timerJob?.cancel()
-        timerJob = viewModelScope.launch {
-            for (i in seconds downTo 0) {
-                _uiState.value = _uiState.value.copy(remainingSeconds = i)
-                if (i == 0) {
-                    submitAnswer()
-                    return@launch
-                }
-                delay(1000)
-            }
-        }
     }
 
     fun updateUserInput(input: String) {
@@ -139,33 +118,103 @@ class TrainingViewModel(
     }
 
     fun submitAnswer() {
-        timerJob?.cancel()
         val state = _uiState.value
         val currentSentence = state.sentences.getOrNull(state.currentIndex) ?: return
         
         viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isLoading = true)
+            
             val responseTime = System.currentTimeMillis() - sessionStartTime
             val userInput = state.userInput.ifBlank { "" }
-
-            // 먼저 로컬 판정 수행
-            val localResult = LocalGradingService.gradeLocally(
-                goldSummaryKo = currentSentence.goldSummaryKo,
-                userSummaryKo = userInput,
-                keywordsCore = currentSentence.keywordsCore
-            )
-
-            var finalResult = GradingResultData(
-                isCorrect = localResult.isCorrect,
-                matchScore = localResult.matchScore,
-                errorType = localResult.errorType,
-                feedbackKo = localResult.feedbackKo,
-                suggestedSummaryKo = currentSentence.goldSummaryKo,
-                isGptResult = false
-            )
 
             // 모르는 단어 저장
             if (state.unknownWords.isNotEmpty()) {
                 repository.saveUnknownWords(state.unknownWords, currentSentence.id)
+            }
+
+            // GPT로 채점 (100% GPT)
+            var finalResult: GradingResultData
+            var gptResultJson: String? = null
+
+            if (gptService != null && userInput.isNotBlank()) {
+                val gptResult = gptService.gradeSummary(
+                    jpSentence = currentSentence.jp,
+                    goldSummaryKo = currentSentence.goldSummaryKo,
+                    userSummaryKo = userInput,
+                    unknownWords = state.unknownWords
+                )
+
+                gptResult.onSuccess { result ->
+                    finalResult = GradingResultData(
+                        isCorrect = result.isCorrect,
+                        matchScore = result.matchScore,
+                        errorType = result.errorType,
+                        feedbackKo = result.feedbackKo,
+                        suggestedSummaryKo = result.suggestedSummaryKo,
+                        isGptResult = true
+                    )
+                    gptResultJson = gson.toJson(result)
+                }.onFailure { e ->
+                    // GPT 실패 시 로컬 fallback
+                    val localResult = LocalGradingService.gradeLocally(
+                        goldSummaryKo = currentSentence.goldSummaryKo,
+                        userSummaryKo = userInput,
+                        keywordsCore = currentSentence.keywordsCore
+                    )
+                    finalResult = GradingResultData(
+                        isCorrect = localResult.isCorrect,
+                        matchScore = localResult.matchScore,
+                        errorType = localResult.errorType,
+                        feedbackKo = "${localResult.feedbackKo} (GPT 오류: ${e.message})",
+                        suggestedSummaryKo = currentSentence.goldSummaryKo,
+                        isGptResult = false
+                    )
+                }
+
+                finalResult = gptResult.getOrNull()?.let { result ->
+                    GradingResultData(
+                        isCorrect = result.isCorrect,
+                        matchScore = result.matchScore,
+                        errorType = result.errorType,
+                        feedbackKo = result.feedbackKo,
+                        suggestedSummaryKo = result.suggestedSummaryKo,
+                        isGptResult = true
+                    )
+                } ?: run {
+                    val localResult = LocalGradingService.gradeLocally(
+                        goldSummaryKo = currentSentence.goldSummaryKo,
+                        userSummaryKo = userInput,
+                        keywordsCore = currentSentence.keywordsCore
+                    )
+                    GradingResultData(
+                        isCorrect = localResult.isCorrect,
+                        matchScore = localResult.matchScore,
+                        errorType = localResult.errorType,
+                        feedbackKo = "${localResult.feedbackKo} (GPT 연결 실패)",
+                        suggestedSummaryKo = currentSentence.goldSummaryKo,
+                        isGptResult = false
+                    )
+                }
+            } else if (userInput.isBlank()) {
+                // 빈 입력
+                finalResult = GradingResultData(
+                    isCorrect = false,
+                    matchScore = 0f,
+                    errorType = ErrorType.MISSING_INFO,
+                    feedbackKo = "답변을 입력해주세요.",
+                    suggestedSummaryKo = currentSentence.goldSummaryKo,
+                    isGptResult = false
+                )
+            } else {
+                // API 키 없음
+                finalResult = GradingResultData(
+                    isCorrect = false,
+                    matchScore = 0f,
+                    errorType = ErrorType.NONE,
+                    feedbackKo = "API 키가 설정되지 않았습니다. 설정에서 OpenAI API 키를 입력해주세요.",
+                    suggestedSummaryKo = currentSentence.goldSummaryKo,
+                    isGptResult = false
+                )
             }
 
             // 시도 기록 저장
@@ -182,7 +231,7 @@ class TrainingViewModel(
                 nextReviewAt = if (!finalResult.isCorrect) {
                     System.currentTimeMillis() + (24 * 60 * 60 * 1000) // D+1
                 } else null,
-                gptResultJson = null
+                gptResultJson = gptResultJson
             )
             repository.insertAttempt(attempt)
 
@@ -199,59 +248,9 @@ class TrainingViewModel(
                     gradingResult = finalResult
                 ),
                 showResult = true,
-                correctCount = newCorrectCount
+                correctCount = newCorrectCount,
+                isLoading = false
             )
-        }
-    }
-
-    fun requestGptFeedback() {
-        val state = _uiState.value
-        val resultData = state.lastResult ?: return
-
-        viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isLoadingGptFeedback = true)
-
-            gptService?.let { service ->
-                val result = service.gradeSummary(
-                    jpSentence = resultData.sentence.jp,
-                    goldSummaryKo = resultData.sentence.goldSummaryKo,
-                    userSummaryKo = resultData.attempt.userSummaryKo,
-                    unknownWords = resultData.attempt.unknownWords
-                )
-
-                result.onSuccess { gptResult ->
-                    val updatedGradingResult = GradingResultData(
-                        isCorrect = gptResult.isCorrect,
-                        matchScore = gptResult.matchScore,
-                        errorType = gptResult.errorType,
-                        feedbackKo = gptResult.feedbackKo,
-                        suggestedSummaryKo = gptResult.suggestedSummaryKo,
-                        isGptResult = true
-                    )
-
-                    // 시도 기록 업데이트
-                    val updatedAttempt = resultData.attempt.copy(
-                        isCorrect = gptResult.isCorrect,
-                        matchScore = gptResult.matchScore,
-                        errorType = gptResult.errorType,
-                        gptResultJson = gson.toJson(gptResult)
-                    )
-                    repository.updateAttempt(updatedAttempt)
-
-                    _uiState.value = _uiState.value.copy(
-                        lastResult = resultData.copy(
-                            attempt = updatedAttempt,
-                            gradingResult = updatedGradingResult
-                        ),
-                        isLoadingGptFeedback = false
-                    )
-                }.onFailure {
-                    _uiState.value = _uiState.value.copy(
-                        isLoadingGptFeedback = false,
-                        error = "GPT 피드백 실패"
-                    )
-                }
-            }
         }
     }
 
@@ -279,24 +278,16 @@ class TrainingViewModel(
     }
 
     fun resetSession() {
-        timerJob?.cancel()
         _uiState.value = TrainingUiState()
-    }
-
-    override fun onCleared() {
-        super.onCleared()
-        timerJob?.cancel()
     }
 }
 
 data class TrainingUiState(
     val sentences: List<SentenceItem> = emptyList(),
     val currentIndex: Int = 0,
-    val remainingSeconds: Int = 5,
     val userInput: String = "",
     val unknownWords: List<String> = emptyList(),
     val isLoading: Boolean = false,
-    val isLoadingGptFeedback: Boolean = false,
     val showResult: Boolean = false,
     val lastResult: ResultData? = null,
     val isSessionComplete: Boolean = false,
