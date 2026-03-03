@@ -1,6 +1,8 @@
 package com.example.jlpt_study.network
 
+import com.example.jlpt_study.data.model.BlockFunction
 import com.example.jlpt_study.data.model.ErrorType
+import com.example.jlpt_study.data.model.FunctionalBlock
 import com.example.jlpt_study.data.model.SentenceItem
 import com.google.gson.Gson
 import com.google.gson.annotations.SerializedName
@@ -24,53 +26,84 @@ class GptService(private val apiKey: String) {
     private val baseUrl = "https://api.openai.com/v1/chat/completions"
 
     /**
-     * N3 레벨 문장 생성 (독해 수준)
+     * N3 레벨 문장 생성 (실제 시험 독해 수준 + 기능 블록 분리)
      */
     suspend fun generateSentences(count: Int = 10): Result<List<SentenceItem>> = withContext(Dispatchers.IO) {
         try {
-            val systemPrompt = """You are a JLPT N3 reading comprehension question generator.
-Generate sentences at ACTUAL N3 reading test difficulty level.
-Return ONLY valid JSON. No extra text or markdown."""
+            val systemPrompt = """You are a JLPT N3 reading comprehension test item writer.
+You create sentences that match the ACTUAL difficulty of N3 読解 section.
+You also split sentences into FUNCTIONAL BLOCKS for reading comprehension training.
+Return ONLY valid JSON. No markdown, no extra text."""
 
-            val userPrompt = """Generate $count JLPT N3-level Japanese sentences for reading comprehension training.
+            val userPrompt = """Generate $count JLPT N3 reading comprehension level sentences.
 
-DIFFICULTY REQUIREMENTS (Important - must be N3 reading level, not easy):
-- Length: 40~80 characters (복문 or 중문 preferred)
-- Must include AT LEAST 2 of these N3 grammar patterns per sentence:
-  * Conditional: ば/たら/なら/と
-  * Cause/reason: ため(に)/によって/おかげで/せいで
-  * Contrast: のに/くせに/にもかかわらず/一方で
-  * Conjecture: らしい/ようだ/みたいだ/はずだ/わけだ
-  * Passive/Causative: れる・られる/せる・させる
-  * Nominalization: こと/の/ということ
-  * Complex endings: ことになる/ことにする/ようになる/ようにする
-  * Formal expressions: において/に関して/によると/にとって
+=== CRITICAL: ACTUAL N3 EXAM DIFFICULTY ===
+These must match real N3 독해 difficulty. NOT simple daily conversation.
 
-CONTENT REQUIREMENTS:
-- Topics: 사회 문제, 직장 생활, 규칙/안내문, 뉴스 기사 스타일, 의견/주장
-- Include some sentences with embedded clauses (関係節)
-- Mix of です/ます and plain form
-- Some keigo expressions (お/ご～になる, いただく)
+REQUIRED N3 GRAMMAR (Use 2-3 per sentence):
+- Cause-Effect: ～ため(に)/～ことから/～おかげで/～せいで/～によって
+- Contrast: ～のに/～にもかかわらず/～一方(で)/～が/～けれども
+- Conjecture: ～らしい/～ようだ/～はずだ/～わけだ
+- Hearsay: ～ということだ/～とのことだ/～そうだ
+- Formal: ～において/～に関して/～について/～にとって
 
-For each sentence, provide:
-- jp: The Japanese sentence
-- gold_summary_ko: Natural Korean summary capturing the KEY POINT (not literal translation)
-- keywords_core: 3 most important words that determine meaning
-- tags: grammar patterns used, topic
+LENGTH: 50~100 characters per sentence
 
-Return JSON:
-{ "items": [ { "jp": "...", "gold_summary_ko": "...", "keywords_core": ["...", "...", "..."], "tags": ["...", "..."] }, ... ] }"""
+=== FUNCTIONAL BLOCK SPLITTING (매우 중요!) ===
+Split each sentence into meaning units based on grammatical function.
+This helps learners understand sentence structure, NOT individual words.
+
+BLOCK SPLITTING RULES:
+- TOPIC: ends with は/が (主題/主語)
+- OBJECT: ends with を
+- LOCATION: ends with に/で/へ/から/まで
+- REASON: ends with ために/ので/から (이유절)
+- CONTRAST: ends with が/けれども/のに (역접)
+- CONDITION: ends with ば/たら/なら (조건)
+- CONCLUSION: ends with 予定だ/ことだ/わけだ/らしい/ようだ/はずだ (결론/추측)
+- QUOTE: ends with という/ということ (인용)
+- OTHER: everything else
+
+EXAMPLE:
+Sentence: "このプロジェクトは、予算が足りないために、遅れているが、来月までには完了する予定だということだ。"
+Blocks:
+- {"text": "このプロジェクトは、", "function": "TOPIC"}
+- {"text": "予算が足りないために、", "function": "REASON"}
+- {"text": "遅れているが、", "function": "CONTRAST"}
+- {"text": "来月までには完了する予定だということだ。", "function": "CONCLUSION"}
+
+For each item return:
+- jp: Full Japanese sentence
+- blocks: Array of {"text": "...", "function": "TOPIC|REASON|CONTRAST|CONDITION|CONCLUSION|QUOTE|LOCATION|OBJECT|OTHER"}
+- gold_summary_ko: Korean summary (핵심만)
+- keywords_core: 3 key words
+- tags: grammar patterns
+
+JSON format:
+{ "items": [ { "jp": "...", "blocks": [{"text": "...", "function": "..."}], "gold_summary_ko": "...", "keywords_core": [...], "tags": [...] } ] }"""
 
             val response = callGpt(systemPrompt, userPrompt)
             val parsed = gson.fromJson(response, GeneratedSentencesResponse::class.java)
             
             val sentences = parsed.items.map { item ->
+                val blocks = item.blocks?.map { block ->
+                    FunctionalBlock(
+                        text = block.text,
+                        function = try {
+                            BlockFunction.valueOf(block.function.uppercase())
+                        } catch (e: Exception) {
+                            BlockFunction.OTHER
+                        }
+                    )
+                } ?: emptyList()
+                
                 SentenceItem(
                     id = UUID.randomUUID().toString(),
                     jp = item.jp,
                     goldSummaryKo = item.goldSummaryKo,
                     keywordsCore = item.keywordsCore,
                     tags = item.tags,
+                    blocks = blocks,
                     createdAt = System.currentTimeMillis()
                 )
             }
@@ -200,9 +233,15 @@ data class GeneratedSentencesResponse(
 
 data class GeneratedSentenceItem(
     val jp: String,
+    val blocks: List<GeneratedBlock>?,
     @SerializedName("gold_summary_ko") val goldSummaryKo: String,
     @SerializedName("keywords_core") val keywordsCore: List<String>,
     val tags: List<String>
+)
+
+data class GeneratedBlock(
+    val text: String,
+    val function: String
 )
 
 // Grading response

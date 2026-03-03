@@ -21,6 +21,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.jlpt_study.data.model.BlockFunction
+import com.example.jlpt_study.data.model.FunctionalBlock
 import com.example.jlpt_study.data.model.SentenceItem
 import com.example.jlpt_study.ui.viewmodel.TrainingUiState
 
@@ -231,21 +233,92 @@ private fun SentenceDisplay(
                 .fillMaxWidth()
                 .padding(20.dp)
         ) {
-            // 문장을 단어/문자 단위로 분리하여 표시
-            // 일본어는 공백이 없으므로, 문자 그룹 단위로 나눔
-            val words = splitJapaneseSentence(sentence.jp)
+            // 기능 블록 단위로 표시
+            val blocks = if (sentence.blocks.isNotEmpty()) {
+                sentence.blocks
+            } else {
+                // fallback: 블록이 없으면 전체 문장을 하나의 블록으로
+                listOf(FunctionalBlock(sentence.jp, BlockFunction.OTHER))
+            }
 
-            FlowRow(
+            Column(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.Start,
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                words.forEach { word ->
-                    val isUnknown = unknownWords.contains(word)
-                    WordChip(
-                        word = word,
+                blocks.forEach { block ->
+                    val isUnknown = unknownWords.contains(block.text)
+                    BlockChip(
+                        block = block,
                         isUnknown = isUnknown,
-                        onClick = { onWordClick(word) }
+                        onClick = { onWordClick(block.text) }
+                    )
+                }
+            }
+            
+            // 모르는 블록 안내
+            if (unknownWords.isEmpty()) {
+                Spacer(modifier = Modifier.height(12.dp))
+                Text(
+                    text = "💡 모르는 부분을 탭하면 표시됩니다",
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun BlockChip(
+    block: FunctionalBlock,
+    isUnknown: Boolean,
+    onClick: () -> Unit
+) {
+    // 블록 기능에 따른 색상 및 라벨
+    val (backgroundColor, borderColor, functionLabel) = getBlockStyle(block.function, isUnknown)
+
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .clickable(onClick = onClick)
+            .border(2.dp, borderColor, RoundedCornerShape(12.dp)),
+        color = backgroundColor
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)
+        ) {
+            // 기능 라벨
+            if (functionLabel.isNotEmpty()) {
+                Text(
+                    text = functionLabel,
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = borderColor,
+                    modifier = Modifier.padding(bottom = 4.dp)
+                )
+            }
+            
+            Row(
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = block.text,
+                    fontSize = 22.sp,
+                    fontWeight = FontWeight.Normal,
+                    color = if (isUnknown) {
+                        MaterialTheme.colorScheme.onErrorContainer
+                    } else {
+                        MaterialTheme.colorScheme.onSurface
+                    }
+                )
+                if (isUnknown) {
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "❓ 모름",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.error
                     )
                 }
             }
@@ -253,158 +326,83 @@ private fun SentenceDisplay(
     }
 }
 
-@Composable
-private fun WordChip(
-    word: String,
-    isUnknown: Boolean,
-    onClick: () -> Unit
-) {
-    val backgroundColor = if (isUnknown) {
-        MaterialTheme.colorScheme.errorContainer
-    } else {
-        Color.Transparent
-    }
-
-    val borderColor = if (isUnknown) {
-        MaterialTheme.colorScheme.error
-    } else {
-        MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
-    }
-
-    Surface(
-        modifier = Modifier
-            .clip(RoundedCornerShape(8.dp))
-            .clickable(onClick = onClick)
-            .border(1.dp, borderColor, RoundedCornerShape(8.dp)),
-        color = backgroundColor
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = word,
-                fontSize = 20.sp,
-                color = if (isUnknown) {
-                    MaterialTheme.colorScheme.onErrorContainer
-                } else {
-                    MaterialTheme.colorScheme.onSurface
-                }
-            )
-            if (isUnknown) {
-                Spacer(modifier = Modifier.width(4.dp))
-                Text(
-                    text = "?",
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.error
-                )
-            }
-        }
-    }
-}
-
 /**
- * 일본어 문장을 의미 있는 단위로 분리
- * 완벽한 형태소 분석은 아니지만, 탭 가능한 단위로 나눔
+ * 블록 기능에 따른 스타일 반환
  */
-private fun splitJapaneseSentence(sentence: String): List<String> {
-    val result = mutableListOf<String>()
-    var current = StringBuilder()
-
-    // 구두점, 조사 등으로 분리
-    val breakChars = setOf('、', '。', '「', '」', '（', '）', '　', ' ', '!', '?', '！', '？')
-    val particles = setOf("は", "が", "を", "に", "で", "と", "も", "の", "へ", "から", "まで", "より", "など")
-
-    for (i in sentence.indices) {
-        val char = sentence[i]
-        current.append(char)
-
-        val currentStr = current.toString()
-        
-        // 구두점에서 분리
-        if (char in breakChars) {
-            if (currentStr.length > 1) {
-                result.add(currentStr.dropLast(1))
-                result.add(char.toString())
-            } else {
-                result.add(currentStr)
-            }
-            current = StringBuilder()
-            continue
-        }
-
-        // 히라가나가 연속되면 조사일 가능성 체크
-        if (current.length >= 2 && isHiragana(char)) {
-            val lastTwo = currentStr.takeLast(2)
-            val lastThree = if (currentStr.length >= 3) currentStr.takeLast(3) else ""
-            
-            if (lastThree in particles || lastTwo in particles) {
-                val particleLen = if (lastThree in particles) 3 else 2
-                val mainPart = currentStr.dropLast(particleLen)
-                val particle = currentStr.takeLast(particleLen)
-                
-                if (mainPart.isNotEmpty()) {
-                    result.add(mainPart)
-                }
-                result.add(particle)
-                current = StringBuilder()
-                continue
-            }
-        }
-
-        // 한자에서 히라가나로 전환시 분리 (용언 활용 제외를 위해 2글자 이상 히라가나)
-        if (current.length >= 4) {
-            val prevChar = sentence.getOrNull(i - 1)
-            if (prevChar != null && isKanji(prevChar) && isHiragana(char)) {
-                // 활용어미일 수 있으므로 좀 더 진행
-            } else if (isKanji(char) && current.length > 1) {
-                // 한자가 나오면 이전까지를 분리
-                val mainPart = currentStr.dropLast(1)
-                if (mainPart.isNotEmpty()) {
-                    result.add(mainPart)
-                }
-                current = StringBuilder()
-                current.append(char)
-            }
-        }
-    }
-
-    if (current.isNotEmpty()) {
-        result.add(current.toString())
-    }
-
-    // 빈 문자열 제거 및 너무 긴 것은 추가 분리
-    return result.filter { it.isNotBlank() }.flatMap { word ->
-        if (word.length > 6) {
-            // 긴 단어는 3-4글자 단위로 분리
-            word.chunked(4)
-        } else {
-            listOf(word)
-        }
-    }
-}
-
-private fun isHiragana(char: Char): Boolean {
-    return char in '\u3040'..'\u309F'
-}
-
-private fun isKanji(char: Char): Boolean {
-    return char in '\u4E00'..'\u9FAF'
-}
-
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun FlowRow(
-    modifier: Modifier = Modifier,
-    horizontalArrangement: Arrangement.Horizontal = Arrangement.Start,
-    verticalArrangement: Arrangement.Vertical = Arrangement.Top,
-    content: @Composable () -> Unit
-) {
-    androidx.compose.foundation.layout.FlowRow(
-        modifier = modifier,
-        horizontalArrangement = horizontalArrangement,
-        verticalArrangement = verticalArrangement,
-        content = { content() }
-    )
+private fun getBlockStyle(
+    function: BlockFunction,
+    isUnknown: Boolean
+): Triple<Color, Color, String> {
+    if (isUnknown) {
+        return Triple(
+            MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.5f),
+            MaterialTheme.colorScheme.error,
+            getFunctionLabel(function)
+        )
+    }
+    
+    return when (function) {
+        BlockFunction.TOPIC -> Triple(
+            Color(0xFFE3F2FD), // Light Blue
+            Color(0xFF1976D2),
+            "주제/주어"
+        )
+        BlockFunction.REASON -> Triple(
+            Color(0xFFFFF3E0), // Light Orange
+            Color(0xFFF57C00),
+            "이유"
+        )
+        BlockFunction.CONTRAST -> Triple(
+            Color(0xFFF3E5F5), // Light Purple
+            Color(0xFF7B1FA2),
+            "역접/대조"
+        )
+        BlockFunction.CONDITION -> Triple(
+            Color(0xFFE8F5E9), // Light Green
+            Color(0xFF388E3C),
+            "조건"
+        )
+        BlockFunction.CONCLUSION -> Triple(
+            Color(0xFFFFEBEE), // Light Pink
+            Color(0xFFC62828),
+            "결론"
+        )
+        BlockFunction.QUOTE -> Triple(
+            Color(0xFFFCE4EC), // Light Rose
+            Color(0xFFAD1457),
+            "인용"
+        )
+        BlockFunction.OBJECT -> Triple(
+            Color(0xFFE0F7FA), // Light Cyan
+            Color(0xFF00838F),
+            "목적어"
+        )
+        BlockFunction.LOCATION -> Triple(
+            Color(0xFFF1F8E9), // Light Lime
+            Color(0xFF689F38),
+            "장소/시간"
+        )
+        BlockFunction.OTHER -> Triple(
+            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+            MaterialTheme.colorScheme.outline.copy(alpha = 0.3f),
+            ""
+        )
+    }
 }
+
+private fun getFunctionLabel(function: BlockFunction): String {
+    return when (function) {
+        BlockFunction.TOPIC -> "주제/주어"
+        BlockFunction.REASON -> "이유"
+        BlockFunction.CONTRAST -> "역접/대조"
+        BlockFunction.CONDITION -> "조건"
+        BlockFunction.CONCLUSION -> "결론"
+        BlockFunction.QUOTE -> "인용"
+        BlockFunction.OBJECT -> "목적어"
+        BlockFunction.LOCATION -> "장소/시간"
+        BlockFunction.OTHER -> ""
+    }
+}
+
+
