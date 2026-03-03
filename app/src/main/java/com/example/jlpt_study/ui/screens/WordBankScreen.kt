@@ -1,5 +1,6 @@
 package com.example.jlpt_study.ui.screens
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -25,6 +26,7 @@ fun WordBankScreen(
     words: List<WordBankItem>,
     isLoading: Boolean,
     onBack: () -> Unit,
+    onDeleteWord: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
     Scaffold(
@@ -93,6 +95,16 @@ fun WordBankScreen(
                 val learningWords = words.filter { it.status == WordStatus.LEARNING }
                 val knownWords = words.filter { it.status == WordStatus.KNOWN }
 
+                // 안내 메시지
+                item {
+                    Text(
+                        text = "💡 이미 아는 단어는 탭해서 삭제하세요",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                }
+
                 if (newWords.isNotEmpty()) {
                     item {
                         SectionHeader(
@@ -101,8 +113,11 @@ fun WordBankScreen(
                             emoji = "🆕"
                         )
                     }
-                    items(newWords) { word ->
-                        WordCard(word = word)
+                    items(newWords, key = { it.surface }) { word ->
+                        WordCard(
+                            word = word,
+                            onDelete = { onDeleteWord(word.surface) }
+                        )
                     }
                 }
 
@@ -115,8 +130,11 @@ fun WordBankScreen(
                             emoji = "📖"
                         )
                     }
-                    items(learningWords) { word ->
-                        WordCard(word = word)
+                    items(learningWords, key = { it.surface }) { word ->
+                        WordCard(
+                            word = word,
+                            onDelete = { onDeleteWord(word.surface) }
+                        )
                     }
                 }
 
@@ -129,8 +147,11 @@ fun WordBankScreen(
                             emoji = "✅"
                         )
                     }
-                    items(knownWords) { word ->
-                        WordCard(word = word)
+                    items(knownWords, key = { it.surface }) { word ->
+                        WordCard(
+                            word = word,
+                            onDelete = { onDeleteWord(word.surface) }
+                        )
                     }
                 }
             }
@@ -176,7 +197,11 @@ private fun SectionHeader(
 }
 
 @Composable
-private fun WordCard(word: WordBankItem) {
+private fun WordCard(
+    word: WordBankItem,
+    onDelete: () -> Unit
+) {
+    var showDeleteDialog by remember { mutableStateOf(false) }
     val dateFormat = remember { SimpleDateFormat("MM/dd", Locale.getDefault()) }
     
     val statusColor = when (word.status) {
@@ -185,8 +210,36 @@ private fun WordCard(word: WordBankItem) {
         WordStatus.KNOWN -> MaterialTheme.colorScheme.primaryContainer
     }
 
+    // 삭제 확인 다이얼로그
+    if (showDeleteDialog) {
+        AlertDialog(
+            onDismissRequest = { showDeleteDialog = false },
+            title = { Text("단어 삭제") },
+            text = { 
+                Text("'${word.surface}'를 단어장에서 삭제할까요?\n(이미 아는 단어)") 
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        onDelete()
+                        showDeleteDialog = false
+                    }
+                ) {
+                    Text("삭제", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteDialog = false }) {
+                    Text("취소")
+                }
+            }
+        )
+    }
+
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { showDeleteDialog = true },
         shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(
             containerColor = statusColor.copy(alpha = 0.5f)
@@ -202,12 +255,24 @@ private fun WordCard(word: WordBankItem) {
             Column(
                 modifier = Modifier.weight(1f)
             ) {
+                // 일본어 단어
                 Text(
                     text = word.surface,
                     fontSize = 20.sp,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onSurface
                 )
+                
+                // 한글 뜻
+                if (word.meaning.isNotBlank()) {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = word.meaning,
+                        fontSize = 16.sp,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+                
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
                     text = "처음 본 날: ${dateFormat.format(Date(word.firstSeenAt))}",

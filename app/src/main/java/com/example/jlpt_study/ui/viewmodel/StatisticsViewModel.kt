@@ -73,6 +73,12 @@ class StatisticsViewModel(
         }
     }
 
+    fun deleteWord(surface: String) {
+        viewModelScope.launch {
+            repository.deleteWord(surface)
+        }
+    }
+
     fun clearError() {
         _uiState.value = _uiState.value.copy(error = null)
     }

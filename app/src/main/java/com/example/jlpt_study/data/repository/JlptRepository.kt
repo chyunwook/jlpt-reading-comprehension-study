@@ -91,10 +91,18 @@ class JlptRepository(
         wordBankDao.updateStatus(surface, status, nextReviewAt)
     }
 
-    suspend fun saveUnknownWords(words: List<String>, sentenceId: String) {
+    // 단어 삭제 (이미 아는 단어)
+    suspend fun deleteWord(surface: String) = wordBankDao.delete(surface)
+
+    suspend fun saveUnknownWords(
+        words: List<String>, 
+        sentenceId: String,
+        meanings: Map<String, String> = emptyMap()
+    ) {
         val wordItems = words.map { word ->
             WordBankItem(
                 surface = word,
+                meaning = meanings[word] ?: "",
                 sentenceId = sentenceId,
                 firstSeenAt = System.currentTimeMillis(),
                 lastSeenAt = System.currentTimeMillis(),

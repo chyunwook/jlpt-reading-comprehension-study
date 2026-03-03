@@ -184,7 +184,8 @@ fun JlptApp() {
                 WordBankScreen(
                     words = wordBankState.words,
                     isLoading = wordBankState.isLoading,
-                    onBack = { navController.popBackStack() }
+                    onBack = { navController.popBackStack() },
+                    onDeleteWord = { surface -> statisticsViewModel.deleteWord(surface) }
                 )
             }
         }

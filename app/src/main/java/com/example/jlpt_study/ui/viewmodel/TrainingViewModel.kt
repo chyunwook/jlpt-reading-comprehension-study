@@ -134,15 +134,11 @@ class TrainingViewModel(
             val responseTime = System.currentTimeMillis() - sessionStartTime
             val userInput = state.userInput.ifBlank { "" }
 
-            // 모르는 단어 저장
-            if (state.unknownWords.isNotEmpty()) {
-                repository.saveUnknownWords(state.unknownWords, currentSentence.id)
-            }
-
             // GPT로 채점 (100% GPT)
             var finalResult: GradingResultData
             var gptResultJson: String? = null
             var keywordsToSave: List<String> = emptyList()
+            var wordMeanings: Map<String, String> = emptyMap()
 
             if (gptService != null && userInput.isNotBlank()) {
                 val gptResult = gptService.gradeSummary(
@@ -155,6 +151,7 @@ class TrainingViewModel(
                 finalResult = gptResult.getOrNull()?.let { result ->
                     gptResultJson = gson.toJson(result)
                     keywordsToSave = result.keywordsCore
+                    wordMeanings = result.wordMeanings
                     GradingResultData(
                         isCorrect = result.isCorrect,
                         matchScore = result.matchScore,
@@ -214,15 +211,19 @@ class TrainingViewModel(
                 responseMs = responseTime,
                 createdAt = System.currentTimeMillis(),
                 nextReviewAt = if (!finalResult.isCorrect) {
-                    System.currentTimeMillis() + (24 * 60 * 60 * 1000) // D+1
+                    System.currentTimeMillis() // 즉시 복습 가능
                 } else null,
                 gptResultJson = gptResultJson
             )
             repository.insertAttempt(attempt)
 
-            // 오답인 경우 핵심 키워드를 단어장에 자동 저장
-            if (!finalResult.isCorrect && keywordsToSave.isNotEmpty()) {
-                repository.saveUnknownWords(keywordsToSave, currentSentence.id)
+            // 모르는 단어 저장 (한글 뜻 포함)
+            if (state.unknownWords.isNotEmpty()) {
+                repository.saveUnknownWords(
+                    words = state.unknownWords,
+                    sentenceId = currentSentence.id,
+                    meanings = wordMeanings
+                )
             }
 
             val newCorrectCount = if (finalResult.isCorrect) {

@@ -65,10 +65,10 @@ fun ResultScreen(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // 정답 요약 카드
+        // 정답 요약 카드 (원래 문장 생성 시 GPT가 만든 정답)
         SentenceCard(
             title = "정답 요약",
-            content = resultData.gradingResult.suggestedSummaryKo,
+            content = resultData.sentence.goldSummaryKo,
             highlight = true
         )
 

@@ -46,4 +46,7 @@ interface WordBankDao {
 
     @Query("UPDATE word_bank SET status = :status, nextReviewAt = :nextReviewAt WHERE surface = :surface")
     suspend fun updateStatus(surface: String, status: WordStatus, nextReviewAt: Long)
+
+    @Query("DELETE FROM word_bank WHERE surface = :surface")
+    suspend fun delete(surface: String)
 }

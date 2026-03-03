@@ -228,10 +228,14 @@ If you cannot follow these instructions exactly, return: {"error":"cannot_comply
     ): Result<GradingResult> = withContext(Dispatchers.IO) {
         try {
             val systemPrompt = """You grade JLPT N3 reading answers. Return ONLY JSON."""
+            
+            val unknownWordsJson = if (unknownWords.isNotEmpty()) {
+                "\n모르는단어: ${unknownWords.joinToString(", ")}\n위 단어들의 한글 뜻을 word_meanings에 반환하세요."
+            } else ""
 
             val userPrompt = """일본어: "$jpSentence"
 정답: "$goldSummaryKo"
-유저: "$userSummaryKo"
+유저: "$userSummaryKo"$unknownWordsJson
 
 === 정답 기준 ===
 1. 의미가 같으면 정답 (동의어 허용)
@@ -242,7 +246,6 @@ If you cannot follow these instructions exactly, return: {"error":"cannot_comply
 - 증가하다 = 늘다 = 많아지다
 - 감소하다 = 줄다 = 적어지다
 - 연기되다 = 미뤄지다
-- 바쁘다 = 시간이 없다
 - ~한다고 한다 = ~한대 = ~래
 
 === 오답 기준 ===
@@ -252,7 +255,7 @@ If you cannot follow these instructions exactly, return: {"error":"cannot_comply
 - 동사 완전히 다름 → verb
 
 === JSON ===
-{"is_correct":true/false,"match_score":0.0-1.0,"error_type":"none|particle|verb|vocab|logic|missing_info","one_line_feedback_ko":"","suggested_summary_ko":"$goldSummaryKo","core_structure":{"cause":"","result":"","contrast":""},"keywords_core":[],"words_optional":[]}"""
+{"is_correct":true/false,"match_score":0.0-1.0,"error_type":"none|particle|verb|vocab|logic|missing_info","one_line_feedback_ko":"","suggested_summary_ko":"","core_structure":{"cause":"","result":"","contrast":""},"keywords_core":[],"words_optional":[],"word_meanings":{"일본어":"한글뜻"}}"""
 
             val response = callGpt(systemPrompt, userPrompt)
             val parsed = gson.fromJson(response, GptGradingResponse::class.java)
@@ -269,7 +272,8 @@ If you cannot follow these instructions exactly, return: {"error":"cannot_comply
                 suggestedSummaryKo = parsed.suggestedSummaryKo,
                 coreStructure = parsed.coreStructure,
                 keywordsCore = parsed.keywordsCore,
-                wordsOptional = parsed.wordsOptional
+                wordsOptional = parsed.wordsOptional,
+                wordMeanings = parsed.wordMeanings ?: emptyMap()
             )
             Result.success(result)
         } catch (e: Exception) {
@@ -362,7 +366,8 @@ data class GptGradingResponse(
     @SerializedName("suggested_summary_ko") val suggestedSummaryKo: String,
     @SerializedName("core_structure") val coreStructure: CoreStructure,
     @SerializedName("keywords_core") val keywordsCore: List<String>,
-    @SerializedName("words_optional") val wordsOptional: List<String>
+    @SerializedName("words_optional") val wordsOptional: List<String>,
+    @SerializedName("word_meanings") val wordMeanings: Map<String, String>? = null
 )
 
 data class CoreStructure(
@@ -380,5 +385,6 @@ data class GradingResult(
     val suggestedSummaryKo: String,
     val coreStructure: CoreStructure,
     val keywordsCore: List<String>,
-    val wordsOptional: List<String>
+    val wordsOptional: List<String>,
+    val wordMeanings: Map<String, String> = emptyMap()  // 일본어 -> 한글뜻
 )

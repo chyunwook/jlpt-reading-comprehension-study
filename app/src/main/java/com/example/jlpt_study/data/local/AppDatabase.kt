@@ -11,7 +11,7 @@ import com.example.jlpt_study.data.model.WordBankItem
 
 @Database(
     entities = [SentenceItem::class, AttemptRecord::class, WordBankItem::class],
-    version = 2,
+    version = 3,
     exportSchema = false
 )
 @TypeConverters(Converters::class)
