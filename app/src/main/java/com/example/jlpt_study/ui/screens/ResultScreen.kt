@@ -13,14 +13,10 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.jlpt_study.data.model.SentenceItem
-import com.example.jlpt_study.ui.viewmodel.GradingResultData
 import com.example.jlpt_study.ui.viewmodel.ResultData
 
 @Composable
@@ -88,22 +84,24 @@ fun ResultScreen(
             Spacer(modifier = Modifier.height(16.dp))
         }
 
-        // 피드백 카드
-        FeedbackCard(
-            feedback = resultData.gradingResult.feedbackKo,
-            isGptResult = resultData.gradingResult.isGptResult
-        )
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // 핵심 키워드
-        KeywordsSection(keywords = resultData.sentence.keywordsCore)
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // 모르는 단어
+        // 모르는 단어 (탭한 것)
         if (resultData.attempt.unknownWords.isNotEmpty()) {
-            UnknownWordsSection(words = resultData.attempt.unknownWords)
+            UnknownWordsSection(
+                title = "📝 모름 표시한 단어",
+                words = resultData.attempt.unknownWords,
+                saved = true
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+        }
+
+        // 핵심 키워드 (오답 시 단어장 저장)
+        if (resultData.sentence.keywordsCore.isNotEmpty()) {
+            UnknownWordsSection(
+                title = if (!isCorrect) "📚 핵심 키워드 (단어장 저장됨)" else "📚 핵심 키워드",
+                words = resultData.sentence.keywordsCore,
+                saved = !isCorrect,
+                isKeyword = true
+            )
             Spacer(modifier = Modifier.height(16.dp))
         }
 
@@ -198,114 +196,50 @@ private fun SentenceCard(
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun FeedbackCard(
-    feedback: String,
-    isGptResult: Boolean
+private fun UnknownWordsSection(
+    title: String,
+    words: List<String>,
+    saved: Boolean = false,
+    isKeyword: Boolean = false
 ) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.secondaryContainer
-        )
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp)
-        ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "💬 피드백",
-                    fontSize = 12.sp,
-                    color = MaterialTheme.colorScheme.onSecondaryContainer
-                )
-                if (isGptResult) {
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Surface(
-                        shape = RoundedCornerShape(4.dp),
-                        color = MaterialTheme.colorScheme.tertiary
-                    ) {
-                        Text(
-                            text = "GPT",
-                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                            fontSize = 10.sp,
-                            color = MaterialTheme.colorScheme.onTertiary
-                        )
-                    }
-                }
-            }
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = feedback,
-                fontSize = 16.sp,
-                color = MaterialTheme.colorScheme.onSecondaryContainer
-            )
-        }
+    val containerColor = if (isKeyword) {
+        MaterialTheme.colorScheme.primaryContainer
+    } else {
+        MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.5f)
     }
-}
+    
+    val textColor = if (isKeyword) {
+        MaterialTheme.colorScheme.onPrimaryContainer
+    } else {
+        MaterialTheme.colorScheme.onErrorContainer
+    }
 
-@Composable
-private fun KeywordsSection(keywords: List<String>) {
     Column(
         modifier = Modifier.fillMaxWidth()
     ) {
         Text(
-            text = "핵심 키워드",
+            text = title,
             fontSize = 14.sp,
             fontWeight = FontWeight.Medium,
             color = MaterialTheme.colorScheme.onSurface
         )
         Spacer(modifier = Modifier.height(8.dp))
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            keywords.forEach { keyword ->
-                Surface(
-                    shape = RoundedCornerShape(8.dp),
-                    color = MaterialTheme.colorScheme.primaryContainer
-                ) {
-                    Text(
-                        text = keyword,
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun UnknownWordsSection(words: List<String>) {
-    Column(
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Text(
-            text = "📝 모름 표시한 단어 (단어장에 저장됨)",
-            fontSize = 14.sp,
-            fontWeight = FontWeight.Medium,
-            color = MaterialTheme.colorScheme.onSurface
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             words.forEach { word ->
                 Surface(
                     shape = RoundedCornerShape(8.dp),
-                    color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.5f)
+                    color = containerColor
                 ) {
                     Text(
                         text = word,
                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
                         fontSize = 14.sp,
-                        color = MaterialTheme.colorScheme.onErrorContainer
+                        color = textColor
                     )
                 }
             }

@@ -1,5 +1,6 @@
 package com.example.jlpt_study.network
 
+import android.util.Log
 import com.example.jlpt_study.data.model.BlockFunction
 import com.example.jlpt_study.data.model.ErrorType
 import com.example.jlpt_study.data.model.FunctionalBlock
@@ -15,6 +16,8 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import java.util.UUID
 import java.util.concurrent.TimeUnit
 
+private const val TAG = "GptService"
+
 class GptService(private val apiKey: String) {
     private val client = OkHttpClient.Builder()
         .connectTimeout(30, TimeUnit.SECONDS)
@@ -26,64 +29,123 @@ class GptService(private val apiKey: String) {
     private val baseUrl = "https://api.openai.com/v1/chat/completions"
 
     /**
-     * N3 레벨 문장 생성 (실제 시험 독해 수준 + 기능 블록 분리)
+     * N3 레벨 문장 생성 (속독 훈련용 + 기능 블록 분리)
      */
     suspend fun generateSentences(count: Int = 10): Result<List<SentenceItem>> = withContext(Dispatchers.IO) {
         try {
-            val systemPrompt = """You are a JLPT N3 reading comprehension test item writer.
-You create sentences that match the ACTUAL difficulty of N3 読解 section.
-You also split sentences into FUNCTIONAL BLOCKS for reading comprehension training.
-Return ONLY valid JSON. No markdown, no extra text."""
+            val systemPrompt = """You are a JLPT N3 reading comprehension item writer.
 
-            val userPrompt = """Generate $count JLPT N3 reading comprehension level sentences.
+Your task is to generate JLPT N3-level reading training sentences
+for speed-reading practice (not casual conversation).
 
-=== CRITICAL: ACTUAL N3 EXAM DIFFICULTY ===
-These must match real N3 독해 difficulty. NOT simple daily conversation.
+The purpose is NOT translation practice.
+The purpose is to train learners to:
+- Ignore unknown words
+- Focus on particles and verbs
+- Identify cause, contrast, and conclusion structure quickly"""
 
-REQUIRED N3 GRAMMAR (Use 2-3 per sentence):
-- Cause-Effect: ～ため(に)/～ことから/～おかげで/～せいで/～によって
-- Contrast: ～のに/～にもかかわらず/～一方(で)/～が/～けれども
-- Conjecture: ～らしい/～ようだ/～はずだ/～わけだ
-- Hearsay: ～ということだ/～とのことだ/～そうだ
-- Formal: ～において/～に関して/～について/～にとって
+            val userPrompt = """Generate $count sentences.
 
-LENGTH: 50~100 characters per sentence
+========================
+DIFFICULTY REQUIREMENTS
+========================
+- Must match actual JLPT N3 読解 difficulty
+- Length: 50–100 Japanese characters
+- Use 2–3 of these grammar patterns per sentence:
 
-=== FUNCTIONAL BLOCK SPLITTING (매우 중요!) ===
-Split each sentence into meaning units based on grammatical function.
-This helps learners understand sentence structure, NOT individual words.
+Cause:
+ため(に), ので, ことから, せいで, おかげで, によって
 
-BLOCK SPLITTING RULES:
-- TOPIC: ends with は/が (主題/主語)
-- OBJECT: ends with を
-- LOCATION: ends with に/で/へ/から/まで
-- REASON: ends with ために/ので/から (이유절)
-- CONTRAST: ends with が/けれども/のに (역접)
-- CONDITION: ends with ば/たら/なら (조건)
-- CONCLUSION: ends with 予定だ/ことだ/わけだ/らしい/ようだ/はずだ (결론/추측)
-- QUOTE: ends with という/ということ (인용)
-- OTHER: everything else
+Contrast:
+が, けれども, のに, にもかかわらず, 一方(で)
 
-EXAMPLE:
-Sentence: "このプロジェクトは、予算が足りないために、遅れているが、来月までには完了する予定だということだ。"
-Blocks:
-- {"text": "このプロジェクトは、", "function": "TOPIC"}
-- {"text": "予算が足りないために、", "function": "REASON"}
-- {"text": "遅れているが、", "function": "CONTRAST"}
-- {"text": "来月までには完了する予定だということだ。", "function": "CONCLUSION"}
+Hearsay / Quote:
+ということだ, とのことだ, そうだ
 
-For each item return:
-- jp: Full Japanese sentence
-- blocks: Array of {"text": "...", "function": "TOPIC|REASON|CONTRAST|CONDITION|CONCLUSION|QUOTE|LOCATION|OBJECT|OTHER"}
-- gold_summary_ko: Korean summary (핵심만)
-- keywords_core: 3 key words
-- tags: grammar patterns
+Conclusion / Conjecture:
+らしい, ようだ, はずだ, わけだ, 予定だ, ことになる
 
-JSON format:
-{ "items": [ { "jp": "...", "blocks": [{"text": "...", "function": "..."}], "gold_summary_ko": "...", "keywords_core": [...], "tags": [...] } ] }"""
+Context should resemble:
+- announcements
+- workplace situations
+- public information
+- daily-life notices
+NOT simple dialogue.
+
+Avoid rare N2/N1 vocabulary.
+
+========================
+FUNCTIONAL BLOCK SPLIT
+========================
+Split each sentence into clause-level meaning blocks
+for structural reading training.
+
+IMPORTANT:
+- Do NOT split into individual words.
+- 3 to 6 blocks per sentence.
+- Each block should be a meaningful clause.
+- Blocks must connect exactly to recreate the original sentence.
+
+Use ONLY these block types:
+TOPIC, REASON, CONTRAST, QUOTE, CONCLUSION, OTHER
+
+========================
+KOREAN SUMMARY RULES (중요!)
+========================
+gold_summary_ko는 일본어 어순을 따라서 작성.
+- 독해 훈련용이므로 일본어 문장 순서대로 번역.
+- 앞에서부터 읽으면서 이해할 수 있게.
+- 25자 내외.
+
+예시 (일본어 어순 유지):
+JP: "このプロジェクトは、予算が足りないために、遅れている"
+순서: 이 프로젝트는 → 예산이 부족해서 → 늦어지고 있다
+정답: "이 프로젝트는 예산 부족으로 지연 중이다"
+
+JP: "会議が延期される予定だということだ"
+순서: 회의가 → 연기될 예정이라고 한다
+정답: "회의가 연기될 예정이라고 한다"
+
+========================
+OUTPUT FORMAT
+========================
+Return ONLY valid JSON.
+No markdown.
+No explanations.
+No code fences.
+
+{
+  "items": [
+    {
+      "jp": "Full Japanese sentence",
+      "blocks": [
+        {"text": "...", "function": "TOPIC"},
+        {"text": "...", "function": "REASON"},
+        {"text": "...", "function": "CONCLUSION"}
+      ],
+      "gold_summary_ko": "일본어 어순을 따른 한국어 요약 (25자 내외)",
+      "keywords_core": ["JapaneseWord1", "JapaneseWord2", "JapaneseWord3"],
+      "tags": ["grammar:ため", "structure:cause_result"]
+    }
+  ]
+}
+
+If you cannot follow these instructions exactly, return: {"error":"cannot_comply"}"""
 
             val response = callGpt(systemPrompt, userPrompt)
+            Log.d(TAG, "========== GPT 문장 생성 응답 ==========")
+            Log.d(TAG, "Raw response: $response")
+            
             val parsed = gson.fromJson(response, GeneratedSentencesResponse::class.java)
+            
+            // 각 문장의 원문과 정답 요약 로그 출력
+            parsed.items.forEachIndexed { index, item ->
+                Log.d(TAG, "--- 문장 ${index + 1} ---")
+                Log.d(TAG, "JP: ${item.jp}")
+                Log.d(TAG, "정답요약: ${item.goldSummaryKo}")
+                Log.d(TAG, "블록: ${item.blocks?.map { "${it.function}: ${it.text}" }}")
+            }
+            Log.d(TAG, "========================================")
             
             val sentences = parsed.items.map { item ->
                 val blocks = item.blocks?.map { block ->
@@ -123,26 +185,34 @@ JSON format:
         unknownWords: List<String>
     ): Result<GradingResult> = withContext(Dispatchers.IO) {
         try {
-            val systemPrompt = """You are an evaluator for a JLPT N3 reading-speed training app.
-Judge whether the user's Korean one-line summary matches the meaning of the Japanese sentence.
-Allow paraphrases. Focus on core meaning (who/what/cause/result).
-Return ONLY valid JSON."""
+            val systemPrompt = """You grade JLPT N3 reading comprehension answers.
+Return ONLY valid JSON. No explanations."""
 
-            val userPrompt = """jp_sentence: "$jpSentence"
-gold_summary_ko: "$goldSummaryKo"
-user_summary_ko: "$userSummaryKo"
-unknown_words: ${gson.toJson(unknownWords)}
+            val userPrompt = """일본어: "$jpSentence"
+정답: "$goldSummaryKo"
+유저답안: "$userSummaryKo"
 
-Return JSON:
+=== 채점 기준 (엄격하게) ===
+1. 문장을 끝까지 완성해야 정답
+2. 일본어 어순대로 번역해야 정답
+3. 핵심 요소 (주어/대조/결론) 모두 있어야 정답
+
+오답 예시:
+- 문장 미완성 → missing_info
+- 어순 틀림 → logic
+- 주어/목적어 틀림 → particle
+- 동사 의미 틀림 → verb
+
+=== JSON 출력 ===
 {
-  "is_correct": boolean,
-  "match_score": number,
-  "error_type": "particle"|"verb"|"vocab"|"logic"|"missing_info"|"none",
-  "one_line_feedback_ko": string,
-  "suggested_summary_ko": string,
-  "core_structure": { "time": string|null, "cause": string|null, "result": string|null },
-  "keywords_core": string[],
-  "words_optional": string[]
+  "is_correct": true/false,
+  "match_score": 0.0-1.0,
+  "error_type": "none|particle|verb|vocab|logic|missing_info",
+  "one_line_feedback_ko": "",
+  "suggested_summary_ko": "$goldSummaryKo",
+  "core_structure": {"cause": "", "result": "", "contrast": ""},
+  "keywords_core": [],
+  "words_optional": []
 }"""
 
             val response = callGpt(systemPrompt, userPrompt)
@@ -257,9 +327,9 @@ data class GptGradingResponse(
 )
 
 data class CoreStructure(
-    val time: String?,
     val cause: String?,
-    val result: String?
+    val result: String?,
+    val contrast: String?
 )
 
 // Grading result model

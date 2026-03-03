@@ -56,7 +56,7 @@ fun TrainingScreen(
             .background(MaterialTheme.colorScheme.background)
     ) {
         if (uiState.isLoading) {
-            LoadingContent()
+            LoadingContent(message = uiState.loadingMessage)
         } else if (uiState.currentSentence != null) {
             Column(
                 modifier = Modifier
@@ -170,7 +170,7 @@ fun TrainingScreen(
 }
 
 @Composable
-private fun LoadingContent(message: String = "GPT가 채점 중입니다...") {
+private fun LoadingContent(message: String) {
     Box(
         modifier = Modifier.fillMaxSize(),
         contentAlignment = Alignment.Center
@@ -214,6 +214,7 @@ private fun TopBar(
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun SentenceDisplay(
     sentence: SentenceItem,
@@ -233,7 +234,7 @@ private fun SentenceDisplay(
                 .fillMaxWidth()
                 .padding(20.dp)
         ) {
-            // 기능 블록 단위로 표시
+            // 기능 블록 단위로 표시 (기존 단어박스 스타일)
             val blocks = if (sentence.blocks.isNotEmpty()) {
                 sentence.blocks
             } else {
@@ -241,8 +242,9 @@ private fun SentenceDisplay(
                 listOf(FunctionalBlock(sentence.jp, BlockFunction.OTHER))
             }
 
-            Column(
+            FlowRow(
                 modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.Start,
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 blocks.forEach { block ->
@@ -274,135 +276,52 @@ private fun BlockChip(
     isUnknown: Boolean,
     onClick: () -> Unit
 ) {
-    // 블록 기능에 따른 색상 및 라벨
-    val (backgroundColor, borderColor, functionLabel) = getBlockStyle(block.function, isUnknown)
+    // 기존 단어박스 스타일 유지
+    val backgroundColor = if (isUnknown) {
+        MaterialTheme.colorScheme.errorContainer
+    } else {
+        Color.Transparent
+    }
+
+    val borderColor = if (isUnknown) {
+        MaterialTheme.colorScheme.error
+    } else {
+        MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
+    }
 
     Surface(
         modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
+            .clip(RoundedCornerShape(8.dp))
             .clickable(onClick = onClick)
-            .border(2.dp, borderColor, RoundedCornerShape(12.dp)),
+            .border(1.dp, borderColor, RoundedCornerShape(8.dp)),
         color = backgroundColor
     ) {
-        Column(
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)
+        Row(
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            // 기능 라벨
-            if (functionLabel.isNotEmpty()) {
-                Text(
-                    text = functionLabel,
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = borderColor,
-                    modifier = Modifier.padding(bottom = 4.dp)
-                )
-            }
-            
-            Row(
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = block.text,
-                    fontSize = 22.sp,
-                    fontWeight = FontWeight.Normal,
-                    color = if (isUnknown) {
-                        MaterialTheme.colorScheme.onErrorContainer
-                    } else {
-                        MaterialTheme.colorScheme.onSurface
-                    }
-                )
-                if (isUnknown) {
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = "❓ 모름",
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.error
-                    )
+            Text(
+                text = block.text,
+                fontSize = 20.sp,
+                color = if (isUnknown) {
+                    MaterialTheme.colorScheme.onErrorContainer
+                } else {
+                    MaterialTheme.colorScheme.onSurface
                 }
+            )
+            if (isUnknown) {
+                Spacer(modifier = Modifier.width(4.dp))
+                Text(
+                    text = "?",
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.error
+                )
             }
         }
     }
 }
 
-/**
- * 블록 기능에 따른 스타일 반환
- */
-@Composable
-private fun getBlockStyle(
-    function: BlockFunction,
-    isUnknown: Boolean
-): Triple<Color, Color, String> {
-    if (isUnknown) {
-        return Triple(
-            MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.5f),
-            MaterialTheme.colorScheme.error,
-            getFunctionLabel(function)
-        )
-    }
-    
-    return when (function) {
-        BlockFunction.TOPIC -> Triple(
-            Color(0xFFE3F2FD), // Light Blue
-            Color(0xFF1976D2),
-            "주제/주어"
-        )
-        BlockFunction.REASON -> Triple(
-            Color(0xFFFFF3E0), // Light Orange
-            Color(0xFFF57C00),
-            "이유"
-        )
-        BlockFunction.CONTRAST -> Triple(
-            Color(0xFFF3E5F5), // Light Purple
-            Color(0xFF7B1FA2),
-            "역접/대조"
-        )
-        BlockFunction.CONDITION -> Triple(
-            Color(0xFFE8F5E9), // Light Green
-            Color(0xFF388E3C),
-            "조건"
-        )
-        BlockFunction.CONCLUSION -> Triple(
-            Color(0xFFFFEBEE), // Light Pink
-            Color(0xFFC62828),
-            "결론"
-        )
-        BlockFunction.QUOTE -> Triple(
-            Color(0xFFFCE4EC), // Light Rose
-            Color(0xFFAD1457),
-            "인용"
-        )
-        BlockFunction.OBJECT -> Triple(
-            Color(0xFFE0F7FA), // Light Cyan
-            Color(0xFF00838F),
-            "목적어"
-        )
-        BlockFunction.LOCATION -> Triple(
-            Color(0xFFF1F8E9), // Light Lime
-            Color(0xFF689F38),
-            "장소/시간"
-        )
-        BlockFunction.OTHER -> Triple(
-            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-            MaterialTheme.colorScheme.outline.copy(alpha = 0.3f),
-            ""
-        )
-    }
-}
 
-private fun getFunctionLabel(function: BlockFunction): String {
-    return when (function) {
-        BlockFunction.TOPIC -> "주제/주어"
-        BlockFunction.REASON -> "이유"
-        BlockFunction.CONTRAST -> "역접/대조"
-        BlockFunction.CONDITION -> "조건"
-        BlockFunction.CONCLUSION -> "결론"
-        BlockFunction.QUOTE -> "인용"
-        BlockFunction.OBJECT -> "목적어"
-        BlockFunction.LOCATION -> "장소/시간"
-        BlockFunction.OTHER -> ""
-    }
-}
 
 

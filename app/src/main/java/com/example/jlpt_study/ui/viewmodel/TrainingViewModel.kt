@@ -35,6 +35,7 @@ class TrainingViewModel(
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(
                 isLoading = true,
+                loadingMessage = if (isReview) "복습할 문장을 불러오고 있어요" else "AI가 N3 독해에 맞는 문장들을 가져오고 있어요",
                 isReviewMode = isReview
             )
 
@@ -123,9 +124,12 @@ class TrainingViewModel(
     fun submitAnswer() {
         val state = _uiState.value
         val currentSentence = state.sentences.getOrNull(state.currentIndex) ?: return
-        
+
         viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isLoading = true)
+            _uiState.value = _uiState.value.copy(
+                isLoading = true,
+                loadingMessage = "AI가 채점하고 있어요"
+            )
             
             val responseTime = System.currentTimeMillis() - sessionStartTime
             val userInput = state.userInput.ifBlank { "" }
@@ -138,6 +142,7 @@ class TrainingViewModel(
             // GPT로 채점 (100% GPT)
             var finalResult: GradingResultData
             var gptResultJson: String? = null
+            var keywordsToSave: List<String> = emptyList()
 
             if (gptService != null && userInput.isNotBlank()) {
                 val gptResult = gptService.gradeSummary(
@@ -147,34 +152,9 @@ class TrainingViewModel(
                     unknownWords = state.unknownWords
                 )
 
-                gptResult.onSuccess { result ->
-                    finalResult = GradingResultData(
-                        isCorrect = result.isCorrect,
-                        matchScore = result.matchScore,
-                        errorType = result.errorType,
-                        feedbackKo = result.feedbackKo,
-                        suggestedSummaryKo = result.suggestedSummaryKo,
-                        isGptResult = true
-                    )
-                    gptResultJson = gson.toJson(result)
-                }.onFailure { e ->
-                    // GPT 실패 시 로컬 fallback
-                    val localResult = LocalGradingService.gradeLocally(
-                        goldSummaryKo = currentSentence.goldSummaryKo,
-                        userSummaryKo = userInput,
-                        keywordsCore = currentSentence.keywordsCore
-                    )
-                    finalResult = GradingResultData(
-                        isCorrect = localResult.isCorrect,
-                        matchScore = localResult.matchScore,
-                        errorType = localResult.errorType,
-                        feedbackKo = "${localResult.feedbackKo} (GPT 오류: ${e.message})",
-                        suggestedSummaryKo = currentSentence.goldSummaryKo,
-                        isGptResult = false
-                    )
-                }
-
                 finalResult = gptResult.getOrNull()?.let { result ->
+                    gptResultJson = gson.toJson(result)
+                    keywordsToSave = result.keywordsCore
                     GradingResultData(
                         isCorrect = result.isCorrect,
                         matchScore = result.matchScore,
@@ -184,6 +164,8 @@ class TrainingViewModel(
                         isGptResult = true
                     )
                 } ?: run {
+                    // GPT 실패 시 로컬 fallback
+                    keywordsToSave = currentSentence.keywordsCore
                     val localResult = LocalGradingService.gradeLocally(
                         goldSummaryKo = currentSentence.goldSummaryKo,
                         userSummaryKo = userInput,
@@ -238,6 +220,11 @@ class TrainingViewModel(
             )
             repository.insertAttempt(attempt)
 
+            // 오답인 경우 핵심 키워드를 단어장에 자동 저장
+            if (!finalResult.isCorrect && keywordsToSave.isNotEmpty()) {
+                repository.saveUnknownWords(keywordsToSave, currentSentence.id)
+            }
+
             val newCorrectCount = if (finalResult.isCorrect) {
                 _uiState.value.correctCount + 1
             } else {
@@ -291,6 +278,7 @@ data class TrainingUiState(
     val userInput: String = "",
     val unknownWords: List<String> = emptyList(),
     val isLoading: Boolean = false,
+    val loadingMessage: String = "AI가 N3 독해에 맞는 문장들을 가져오고 있어요",
     val showResult: Boolean = false,
     val lastResult: ResultData? = null,
     val isSessionComplete: Boolean = false,

@@ -11,7 +11,7 @@ import com.example.jlpt_study.data.model.WordBankItem
 
 @Database(
     entities = [SentenceItem::class, AttemptRecord::class, WordBankItem::class],
-    version = 1,
+    version = 2,
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -30,7 +30,10 @@ abstract class AppDatabase : RoomDatabase() {
                     context.applicationContext,
                     AppDatabase::class.java,
                     "jlpt_study_database"
-                ).build()
+                )
+                    // 스키마 변경 시 데이터 초기화 (개발 단계)
+                    .fallbackToDestructiveMigration()
+                    .build()
                 INSTANCE = instance
                 instance
             }
