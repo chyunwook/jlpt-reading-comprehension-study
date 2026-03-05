@@ -97,12 +97,14 @@ class JlptRepository(
     suspend fun saveUnknownWords(
         words: List<String>, 
         sentenceId: String,
-        meanings: Map<String, String> = emptyMap()
+        wordInfo: Map<String, WordInfoData> = emptyMap()
     ) {
         val wordItems = words.map { word ->
+            val info = wordInfo[word]
             WordBankItem(
                 surface = word,
-                meaning = meanings[word] ?: "",
+                reading = info?.reading ?: "",
+                meaning = info?.meaning ?: "",
                 sentenceId = sentenceId,
                 firstSeenAt = System.currentTimeMillis(),
                 lastSeenAt = System.currentTimeMillis(),
@@ -112,6 +114,12 @@ class JlptRepository(
         }
         wordBankDao.insertAll(wordItems)
     }
+    
+    // 단어 정보 (발음 + 뜻)
+    data class WordInfoData(
+        val reading: String = "",
+        val meaning: String = ""
+    )
 
     private fun getStartOfDay(): Long {
         val calendar = Calendar.getInstance().apply {

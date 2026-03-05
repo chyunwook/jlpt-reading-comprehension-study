@@ -255,13 +255,22 @@ private fun WordCard(
             Column(
                 modifier = Modifier.weight(1f)
             ) {
-                // 일본어 단어
+                // 일본어 단어 (한자)
                 Text(
                     text = word.surface,
                     fontSize = 20.sp,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onSurface
                 )
+                
+                // 히라가나 발음
+                if (word.reading.isNotBlank()) {
+                    Text(
+                        text = "(${word.reading})",
+                        fontSize = 14.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
                 
                 // 한글 뜻
                 if (word.meaning.isNotBlank()) {

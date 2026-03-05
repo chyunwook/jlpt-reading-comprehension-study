@@ -10,7 +10,8 @@ import androidx.room.PrimaryKey
 @Entity(tableName = "word_bank")
 data class WordBankItem(
     @PrimaryKey
-    val surface: String,                     // 일본어 단어
+    val surface: String,                     // 일본어 단어 (한자 포함)
+    val reading: String = "",                // 히라가나 발음
     val meaning: String = "",                // 한글 뜻
     val sentenceId: String,                  // 처음 발견된 문장 ID
     val firstSeenAt: Long = System.currentTimeMillis(),

@@ -138,7 +138,7 @@ class TrainingViewModel(
             var finalResult: GradingResultData
             var gptResultJson: String? = null
             var keywordsToSave: List<String> = emptyList()
-            var wordMeanings: Map<String, String> = emptyMap()
+            var wordInfoMap: Map<String, JlptRepository.WordInfoData> = emptyMap()
 
             if (gptService != null && userInput.isNotBlank()) {
                 val gptResult = gptService.gradeSummary(
@@ -151,7 +151,13 @@ class TrainingViewModel(
                 finalResult = gptResult.getOrNull()?.let { result ->
                     gptResultJson = gson.toJson(result)
                     keywordsToSave = result.keywordsCore
-                    wordMeanings = result.wordMeanings
+                    // WordInfo를 WordInfoData로 변환
+                    wordInfoMap = result.wordInfo.mapValues { (_, info) ->
+                        JlptRepository.WordInfoData(
+                            reading = info.reading,
+                            meaning = info.meaning
+                        )
+                    }
                     GradingResultData(
                         isCorrect = result.isCorrect,
                         matchScore = result.matchScore,
@@ -217,12 +223,12 @@ class TrainingViewModel(
             )
             repository.insertAttempt(attempt)
 
-            // 모르는 단어 저장 (한글 뜻 포함)
+            // 모르는 단어 저장 (히라가나 발음 + 한글 뜻 포함)
             if (state.unknownWords.isNotEmpty()) {
                 repository.saveUnknownWords(
                     words = state.unknownWords,
                     sentenceId = currentSentence.id,
-                    meanings = wordMeanings
+                    wordInfo = wordInfoMap
                 )
             }
 
